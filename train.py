@@ -18,13 +18,18 @@ def get_dataloaders(batch_size: int = 128, remove_label: int | None = None):
     if remove_label is not None:
         # Filter out all examples with the given label
         train_idx = [i for i, t in enumerate(train_set.targets) if int(t) != int(remove_label)]
+        removed_train_data = [i for i in range(len(train_set)) if int(train_set[i][1]) == int(remove_label)]
+        removed_test_data = [i for i in range(len(test_set)) if int(test_set[i][1]) == int(remove_label)]
         test_idx = [i for i, t in enumerate(test_set.targets) if int(t) != int(remove_label)]
-        train_set = Subset(train_set, train_idx)
-        test_set = Subset(test_set, test_idx)
+        new_train_set = Subset(train_set, train_idx)
+        new_test_set = Subset(test_set, test_idx)
+        removed_train_set = Subset(train_set, removed_train_data) 
+        removed_test_set = Subset(test_set, removed_test_data)
+        return DataLoader(new_train_set, batch_size=batch_size, shuffle=True), DataLoader(new_test_set, batch_size=batch_size, shuffle=False), DataLoader(removed_train_set, batch_size=batch_size, shuffle=False), DataLoader(removed_test_set, batch_size=batch_size, shuffle=False)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
-    return train_loader, test_loader
+    return train_loader, test_loader, None, None
 
 
 def train_one_epoch(model, device, loader, optimizer, criterion):

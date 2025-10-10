@@ -11,8 +11,12 @@ def main():
     args = parser.parse_args()
 
     print("Training on full dataset...")
-    train_data, test_data = get_dataloaders(batch_size=args.batch_size, remove_label=None)
-    train_data_reduced, test_data_reduced = get_dataloaders(batch_size=args.batch_size, remove_label=args.remove_label)
+    train_data, test_data, _, _ = get_dataloaders(batch_size=args.batch_size, remove_label=None)
+    train_data_reduced, test_data_reduced, removed_train_data, removed_test_data = get_dataloaders(batch_size=args.batch_size, remove_label=args.remove_label)
+
+    print(len(train_data), len(test_data))
+    print(len(train_data_reduced), len(train_data_reduced))
+    print(len(removed_train_data), len(removed_test_data))
 
 
     model = run_training(train_data=train_data, test_data=test_data, epochs=args.epochs)
@@ -24,6 +28,10 @@ def main():
     print(f"Final evaluation on train dataset reduced - val loss {val_loss:.4f} acc {val_acc:.4f}")
     val_loss, val_acc = evaluate(model, test_data_reduced, nn.CrossEntropyLoss())   
     print(f"Final evaluation on test dataset reduced - val loss {val_loss:.4f} acc {val_acc:.4f}")
+    val_loss, val_acc = evaluate(model, removed_train_data, nn.CrossEntropyLoss())
+    print(f"Final evaluation on removed train dataset - val loss {val_loss:.4f} acc {val_acc:.4f}")
+    val_loss, val_acc = evaluate(model, removed_test_data, nn.CrossEntropyLoss())   
+    print(f"Final evaluation on removed test dataset - val loss {val_loss:.4f} acc {val_acc:.4f}")
     
 
 
@@ -37,6 +45,10 @@ def main():
     print(f"Final evaluation on train dataset reduced - val loss {val_loss:.4f} acc {val_acc:.4f}")
     val_loss, val_acc = evaluate(model, test_data_reduced, nn.CrossEntropyLoss())   
     print(f"Final evaluation on test dataset reduced - val loss {val_loss:.4f} acc {val_acc:.4f}")
+    val_loss, val_acc = evaluate(model, removed_train_data, nn.CrossEntropyLoss())
+    print(f"Final evaluation on removed train dataset - val loss {val_loss:.4f} acc {val_acc:.4f}")
+    val_loss, val_acc = evaluate(model, removed_test_data, nn.CrossEntropyLoss())   
+    print(f"Final evaluation on removed test dataset - val loss {val_loss:.4f} acc {val_acc:.4f}")
 
 
 if __name__ == "__main__":
