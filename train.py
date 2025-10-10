@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, Subset
@@ -6,7 +7,7 @@ from torchvision import datasets, transforms
 from model import LeNet
 
 
-def get_dataloaders(batch_size: int = 128, remove_label: int | None = None):
+def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remove_elements: int | None = None):
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,)),
@@ -14,6 +15,18 @@ def get_dataloaders(batch_size: int = 128, remove_label: int | None = None):
 
     train_set = datasets.MNIST(root="./data", train=True, download=True, transform=transform)
     test_set = datasets.MNIST(root="./data", train=False, download=True, transform=transform)
+
+    if remove_elements is not None:
+        # Randomly remove a certain number of elements from the training set
+        if remove_elements > len(train_set):
+            raise ValueError("remove_elements exceeds the size of the training set")
+        indices = list(range(len(train_set)))
+        np.random.shuffle(indices)
+        indices_to_keep = indices[remove_elements:]
+        incides_to_remove = indices[:remove_elements]
+        new_train_set = Subset(train_set, indices_to_keep)
+        removed_set = Subset(train_set, incides_to_remove)
+        return DataLoader(new_train_set, batch_size=batch_size, shuffle=True), DataLoader(test_set, batch_size=batch_size, shuffle=False), DataLoader(removed_set, batch_size=batch_size, shuffle=False), None
 
     if remove_label is not None:
         # Filter out all examples with the given label
