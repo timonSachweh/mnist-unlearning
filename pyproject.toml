@@ -1,0 +1,12 @@
+[project]
+name = "mnist-unlearning"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+	"torch>=2.0",
+	"torchvision>=0.15",
+	"fastapi>=0.95",
+	"uvicorn>=0.22",
+]
