@@ -11,10 +11,11 @@ from utils import device
 def retrain(model, train_loader, test_loader, num_epochs):
     run_training(model, train_loader, test_loader, epochs=num_epochs)
 
-def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, batch_size=64, unlearn_epochs=3, loss=nn.CrossEntropyLoss(), lambda_var=0.1, learning_rate=0.001):
+
+def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, batch_size: int = 64,
+            unlearn_epochs: int = 3, loss=nn.CrossEntropyLoss(), lambda_var: float = 0.1, learning_rate: float = 0.001):
     # compute gradients on unlearn_loader and adjust model weights accordingly
     removal_x, removal_y = _get_unlearn_data(unlearn_loader)
-
     model.to(device)
 
     grads = _calculate_gradients(model, removal_x, removal_y, loss)
@@ -31,34 +32,34 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
     model_working_copy = copy.deepcopy(model)
     model_working_copy.to(device)
     for epoch in range(unlearn_epochs):
-        print(f"Unlearning epoch {epoch+1}/{unlearn_epochs}")
-        for i in range(int(max(len(keep_data_loader), len(unlearn_loader))/batch_size)):
-            keep_x, keep_y, unlearn_x, unlearn_y = _sample_batch_from_dataset(keep_data_loader, unlearn_loader, batch_size)
+        print(f"Unlearning epoch {epoch + 1}/{unlearn_epochs}")
+        for i in range(int(max(len(keep_data_loader), len(unlearn_loader)) / batch_size)):
+            keep_x, keep_y, unlearn_x, unlearn_y = _sample_batch_from_dataset(keep_data_loader, unlearn_loader,
+                                                                              batch_size)
             unlearn_y_fake = _generate_fake_label(unlearn_y)
             keep_x = keep_x.to(device)
             keep_y = keep_y.to(device)
             unlearn_x = unlearn_x.to(device)
-            unlearn_y = unlearn_y.to(device)
             unlearn_y_fake = unlearn_y_fake.to(device)
 
             masked_params = saliency_map * theta_weights
 
-            vector_to_parameters(torch.tensor(masked_params).to(device), model_working_copy.parameters())
+            vector_to_parameters(masked_params.detach().clone(), model_working_copy.parameters())
             model_working_copy.zero_grad()
             pred_unlearn = model_working_copy(unlearn_x)
             pred_learn = model_working_copy(keep_x)
 
-            l = loss(pred_unlearn, unlearn_y_fake) + loss(pred_learn, keep_y) + lambda_var * (masked_params - saliency_map * theta_g_weights).norm(p=2)
-            #l = lambda_var * (masked_params - saliency_map * theta_g_weights).norm(p=2)
+            l = loss(pred_unlearn, unlearn_y_fake) + loss(pred_learn, keep_y) + lambda_var * (
+                    masked_params - saliency_map * theta_g_weights).norm(p=2)
             l.backward()
 
-            gradient = torch.cat([p.grad.detach().view(-1) for p in model_working_copy.parameters() if p.grad is not None])
+            gradient = torch.cat(
+                [p.grad.detach().view(-1) for p in model_working_copy.parameters() if p.grad is not None])
             theta_weights = theta_weights - gradient * learning_rate
 
-    theta_weights = saliency_map * theta_weights + (1-saliency_map) * theta_g_weights
-    vector_to_parameters(torch.tensor(theta_weights), model.parameters())
+    theta_weights = saliency_map * theta_weights + (1 - saliency_map) * theta_g_weights
+    vector_to_parameters(theta_weights.detach().clone(), model.parameters())
     return model
-
 
 
 # TODO: potentiell nicht alle zu vergessenden Punkte erwischt
@@ -76,6 +77,7 @@ def _sample_batch_from_dataset(keep_data_loader, unlearn_loader, batch_size):
     unlearn_x = torch.stack([s[0] for s in unlearn_samples])
     unlearn_y = torch.tensor([s[1] for s in unlearn_samples])
     return keep_x, keep_y, unlearn_x, unlearn_y
+
 
 def _generate_fake_label(unlearn_y):
     # create fake labels in 0..10 that differ elementwise from unlearn_y
@@ -101,6 +103,7 @@ def _calculate_gradients(model, removal_x, removal_y, loss):
     if len(g) == 0:
         raise RuntimeError("No gradients were computed for the model parameters")
     return torch.cat(g)
+
 
 def _get_unlearn_data(unlearn_loader: DataLoader):
     removal_x_batches = []
