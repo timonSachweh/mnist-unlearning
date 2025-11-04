@@ -1,5 +1,6 @@
 import argparse
 import torch.nn as nn
+from model import LeNet
 from train import get_dataloaders, run_training, evaluate
 
 
@@ -17,9 +18,11 @@ def main():
     train_data, test_data, _, _ = get_dataloaders(batch_size=args.batch_size, remove_label=None)
     train_data_reduced, test_data_reduced, removed_train_data, removed_test_data = get_dataloaders(batch_size=args.batch_size, remove_label=args.remove_label)
 
+    model = LeNet()
+
     if args.full:
         print("Training on full dataset...")
-        model = run_training(train_data=train_data, test_data=test_data, epochs=args.epochs)
+        model = run_training(model=model, train_data=train_data, test_data=test_data, epochs=args.epochs)
         val_loss, val_acc = evaluate(model, train_data, nn.CrossEntropyLoss())
         print(f"Final evaluation on train dataset - val loss {val_loss:.4f} acc {val_acc:.4f}")
         val_loss, val_acc = evaluate(model, test_data, nn.CrossEntropyLoss())   
@@ -36,7 +39,7 @@ def main():
 
     if args.class_removed:
         print(f"Training with label {args.remove_label} removed...")
-        model = run_training(train_data=train_data_reduced, test_data=test_data_reduced, epochs=args.epochs)
+        model = run_training(model=model, train_data=train_data_reduced, test_data=test_data_reduced, epochs=args.epochs)
         val_loss, val_acc = evaluate(model, train_data, nn.CrossEntropyLoss())
         print(f"Final evaluation on train dataset - val loss {val_loss:.4f} acc {val_acc:.4f}")
         val_loss, val_acc = evaluate(model, test_data, nn.CrossEntropyLoss())   
@@ -54,7 +57,7 @@ def main():
     if args.elements_removed:
         print(f"Training with data where {args.elements} elements are removed from dataset")
         train_data, test_data, elements_removed, _ = get_dataloaders(batch_size=args.batch_size, remove_elements=args.elements)
-        model = run_training(train_data=train_data, test_data=test_data, epochs=args.epochs)
+        model = run_training(model=model, train_data=train_data, test_data=test_data, epochs=args.epochs)
         val_loss, val_acc = evaluate(model, train_data, nn.CrossEntropyLoss())
         print(f"Final evaluation on train dataset without elements - val loss {val_loss:.4f} acc {val_acc:.4f}")
         val_loss, val_acc = evaluate(model, test_data, nn.CrossEntropyLoss())   

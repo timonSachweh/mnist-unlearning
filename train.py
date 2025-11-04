@@ -4,6 +4,7 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
+from evaluate import evaluate
 from model import LeNet
 
 
@@ -65,29 +66,9 @@ def train_one_epoch(model, device, loader, optimizer, criterion):
     return total_loss / total, correct / total
 
 
-def evaluate(model, loader, criterion):
+def run_training(model, train_data, test_data, epochs: int = 3):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.eval()
-    total_loss = 0.0
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for x, y in loader:
-            x, y = x.to(device), y.to(device)
-            out = model(x)
-            loss = criterion(out, y)
-            total_loss += loss.item() * x.size(0)
-            _, preds = out.max(1)
-            correct += (preds == y).sum().item()
-            total += x.size(0)
-    return total_loss / total, correct / total
-
-
-def run_training(train_data, test_data, epochs: int = 3):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_classes = 10
-    model = LeNet(num_classes=num_classes).to(device)
-
+    model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
