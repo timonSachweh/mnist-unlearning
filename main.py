@@ -3,6 +3,7 @@ import argparse
 from evaluate import evaluate_log
 from model import LeNet
 from train import get_dataloaders, run_training, evaluate
+from unlearning import unlearn
 
 
 def main():
@@ -19,22 +20,26 @@ def main():
     train_data, test_data, _, _ = get_dataloaders(batch_size=args.batch_size, remove_label=None)
     train_data_reduced, test_data_reduced, removed_train_data, removed_test_data = get_dataloaders(batch_size=args.batch_size, remove_label=args.remove_label)
 
-    model = LeNet()
-
-    if args.full:
-        model = run_training(model=model, train_data=train_data, test_data=test_data, epochs=args.epochs)
-        evaluate_log(model, train_data, test_data, train_data_reduced, test_data_reduced, prefix="Initial training")
+    model_init = run_training(model=LeNet(), train_data=train_data, test_data=test_data, epochs=args.epochs)
+    evaluate_log(model_init, train_data, test_data, train_data_reduced, test_data_reduced, prefix="Initial training")
     
 
     if args.class_removed:
-        model = run_training(model=model, train_data=train_data_reduced, test_data=test_data_reduced, epochs=args.epochs)
-        evaluate_log(model, train_data, test_data, train_data_reduced, test_data_reduced, removed_train_data=removed_train_data, removed_test_data=removed_test_data, prefix="After removing class")
+        #model = run_training(model=LeNet(), train_data=train_data_reduced, test_data=test_data_reduced, epochs=args.epochs)
+        #evaluate_log(model, train_data, test_data, train_data_reduced, test_data_reduced, removed_train_data=removed_train_data, removed_test_data=removed_test_data, prefix="Retraining removing class")
+        if model_init and removed_train_data is not None:
+            for lambda_val in [0.0, 0.2, 0.5, 0.7]:
+                model = unlearn(model_init, train_data_reduced, removed_train_data, unlearn_epochs=6, learning_rate=0.01, lambda_var=lambda_val)
+                evaluate_log(model, train_data, test_data, train_data_reduced, test_data_reduced,
+                             removed_train_data=removed_train_data, removed_test_data=removed_test_data,
+                             prefix=f"Unlearning removing class lambda={lambda_val}")
 
     if args.elements_removed:
         train_data_reduced, test_data, elements_removed, _ = get_dataloaders(batch_size=args.batch_size, remove_elements=args.elements)
-        model = run_training(model=model, train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
-        evaluate_log(model, train_data, test_data, train_data_reduced, elements_removed=elements_removed, prefix="After removing elements")
-
+        #model = run_training(model=LeNet(), train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
+        #evaluate_log(model, train_data, test_data, train_data_reduced, elements_removed=elements_removed, prefix="After removing elements")
+        if model_init and elements_removed is not None:
+            model = unlearn(model_init, train_data_reduced, elements_removed, unlearn_epochs=1)
 
 
 if __name__ == "__main__":
