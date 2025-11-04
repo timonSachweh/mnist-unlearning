@@ -2,10 +2,10 @@
 
 import torch
 import torch.nn as nn
+from utils import device
 
 
 def evaluate(model, loader, criterion):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     total_loss = 0.0
     correct = 0

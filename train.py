@@ -1,11 +1,9 @@
-import os
 import numpy as np
-import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from evaluate import evaluate
-from model import LeNet
+from utils import device
 
 
 def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remove_elements: int | None = None):
@@ -46,7 +44,7 @@ def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remo
     return train_loader, test_loader, None, None
 
 
-def train_one_epoch(model, device, loader, optimizer, criterion):
+def train_one_epoch(model, loader, optimizer, criterion):
     model.train()
     total_loss = 0.0
     correct = 0
@@ -67,13 +65,12 @@ def train_one_epoch(model, device, loader, optimizer, criterion):
 
 
 def run_training(model, train_data, test_data, epochs: int = 3):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     for epoch in range(1, epochs + 1):
-        train_loss, train_acc = train_one_epoch(model, device, train_data, optimizer, criterion)
+        train_loss, train_acc = train_one_epoch(model, train_data, optimizer, criterion)
         val_loss, val_acc = evaluate(model, test_data, criterion)
         print(f"Epoch {epoch}/{epochs} | train loss {train_loss:.4f} acc {train_acc:.4f} | val loss {val_loss:.4f} acc {val_acc:.4f}")
 
