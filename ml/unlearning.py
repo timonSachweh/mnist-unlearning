@@ -2,7 +2,7 @@ import copy
 
 from torch.nn.utils import vector_to_parameters
 
-from train import run_training
+from .train import run_training
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader

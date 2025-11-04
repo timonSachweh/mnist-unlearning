@@ -2,7 +2,7 @@ import numpy as np
 from torch import nn, optim
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
-from evaluate import evaluate
+from ml.evaluate import evaluate
 from utils import device
 
 

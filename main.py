@@ -2,15 +2,11 @@ import argparse
 import itertools
 from typing import Iterable, Iterator, Union, Tuple, Dict
 
-from evaluate import evaluate_log
-from model import LeNet
-from train import get_dataloaders, run_training, evaluate
-from unlearning import unlearn
+from ml import evaluate_log, LeNet, get_dataloaders, run_training, unlearn
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--full", action="store_true", help="If set, run the full-dataset training/evaluation section")
     parser.add_argument("--class-removed", action="store_true",
                         help="If set, run the full-dataset training/evaluation section")
     parser.add_argument("--elements-removed", action="store_true",
