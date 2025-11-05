@@ -59,7 +59,7 @@ def main():
                             learning_rate=lr, batch_size=b, lambda_var=l)
             evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test,
                          removed_train_data=d_cr_r_train, removed_test_data=d_cr_r_test,
-                         prefix=f"Unlearning removing {args.elements_removed} elements (epochs={e}, lr={lr}, batch_size={b}, lambda={l})")
+                         prefix=f"Unlearning removing {args.elements} elements (epochs={e}, lr={lr}, batch_size={b}, lambda={l})")
 
 
 def unlearn_combinations(
