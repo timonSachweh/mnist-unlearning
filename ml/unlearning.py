@@ -34,7 +34,8 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
     model_working_copy = copy.deepcopy(model)
     model_working_copy.to(device)
     for epoch in range(unlearn_epochs):
-        print(f"Unlearning epoch {epoch + 1}/{unlearn_epochs}")
+        if (epoch + 1) % 10 == 0:
+            print(f"Unlearning epoch {epoch + 1}/{unlearn_epochs}")
         for i in range(int(max(len(keep_data_loader), len(unlearn_loader)) / batch_size)):
             keep_x, keep_y, unlearn_x, unlearn_y = _sample_batch_from_dataset(keep_data_loader, unlearn_loader,
                                                                               batch_size)

@@ -70,8 +70,7 @@ def test_unlearning_over_lambdas(
 
 def plot_lambda_scan(lambdas, run_accuracies, plot_path="./images/lambda_results.png"):
     plt.figure(figsize=(8, 5))
-    plt.ylim(0, 1)
-    #plt.plot(lambdas, median_accuracies, marker="o")
+    # plt.ylim(0, 1)
     plt.boxplot(run_accuracies, positions=lambdas, widths=0.02)
     plt.xlabel("Lambda")
     plt.ylabel("Boxplot Test Accuracy")
