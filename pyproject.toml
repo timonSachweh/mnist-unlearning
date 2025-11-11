@@ -9,4 +9,5 @@ dependencies = [
 	"torchvision>=0.15",
 	"fastapi>=0.95",
 	"uvicorn>=0.22",
+	"matplotlib>=3.10.7",
 ]

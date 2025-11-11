@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from utils import device
-from numpy.linalg import norm
 
 
 def retrain(model, train_loader, test_loader, num_epochs):
@@ -52,14 +51,9 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
             pred_unlearn = model_working_copy(unlearn_x)
             pred_learn = model_working_copy(keep_x)
 
-            term_norm = (norm(lambda_var * (
-                    masked_params - saliency_map * theta_g_weights).detach().cpu().numpy())) ** 2
-            term_v = Variable(term_norm.data, requires_grad=True)
-            loss_total = loss(pred_unlearn, unlearn_y_fake) + loss(pred_learn, keep_y) + term_norm
-            # loss_total_without = loss(pred_unlearn, unlearn_y_fake) + loss(pred_learn, keep_y)
-            # print(term_v, term_norm)
-            # print(loss_total)
-            loss_total.backward()
+            norm_loss = (masked_params - saliency_map * theta_g_weights).norm(p=2).pow(2)
+            l = loss(pred_unlearn, unlearn_y_fake) + loss(pred_learn, keep_y) + lambda_var * norm_loss
+            l.backward()
 
             gradient = torch.cat(
                 [p.grad.detach().view(-1) for p in model_working_copy.parameters() if p.grad is not None])

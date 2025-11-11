@@ -63,12 +63,12 @@ def test_unlearning_over_lambdas(
 
         run_accuracies.append(per_run_accuracies)
 
-        plot_lambda_scan(lambdas[:i + 1], run_accuracies, f"lambda_results_temp{lam: .3f}.png")
+        plot_lambda_scan(lambdas[:i + 1], run_accuracies, f"./images/lambda_results_temp{lam: .3f}.png")
 
     return lambdas, run_accuracies
 
 
-def plot_lambda_scan(lambdas, run_accuracies, plot_path="lambda_results.png"):
+def plot_lambda_scan(lambdas, run_accuracies, plot_path="./images/lambda_results.png"):
     plt.figure(figsize=(8, 5))
     plt.ylim(0, 1)
     #plt.plot(lambdas, median_accuracies, marker="o")

@@ -2,12 +2,16 @@ import argparse
 import itertools
 from typing import Iterable, Iterator, Union, Tuple, Dict
 
+import torch
+
 from ml import evaluate_log, LeNet, get_dataloaders, run_training, unlearn
 from ml.test_plot import test_unlearning_over_lambdas
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--retrain', help='if the retraining step should be executed', action='store_true')
+    parser.add_argument('--seed', type=int, default=42, help='random seed for reproducibility')
     parser.add_argument("--class-removed", action="store_true",
                         help="If set, run the full-dataset training/evaluation section")
     parser.add_argument("--elements-removed", action="store_true",
@@ -24,6 +28,8 @@ def main():
     parser.add_argument("--plot", action="store_true", help="If set, test and save lambda-scan plot")
     args = parser.parse_args()
 
+    torch.manual_seed(args.seed)
+
     ul_epochs = [int(i) for i in args.unlearn_epochs.split(',')]
     ul_learning_rates = [float(i) for i in args.unlearn_learning_rates.split(',')]
     ul_batch_sizes = [int(i) for i in args.unlearn_batch_sizes.split(',')]
@@ -38,9 +44,10 @@ def main():
                  removed_test_data=d_cr_r_test, prefix="Initial training")
 
     if args.class_removed:
-        # model = run_training(model=LeNet(), train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
-        # evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
-        #             removed_test_data=d_cr_r_test, prefix="Retraining removing class")
+        if args.retrain:
+            model = run_training(model=LeNet(), train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
+            evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
+                     removed_test_data=d_cr_r_test, prefix="Retraining removing class")
 
         # ----------------------------------------------------------
         # Optional: LAMBDA-SCAN ausführen und Plot speichern
@@ -73,8 +80,9 @@ def main():
     if args.elements_removed:
         train_data_reduced, test_data, elements_removed, _ = get_dataloaders(batch_size=args.batch_size,
                                                                              remove_elements=args.elements)
-        model = run_training(model=LeNet(), train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
-        evaluate_log(model, d_train, test_data, train_data_reduced, elements_removed=elements_removed,
+        if args.retrain:
+            model = run_training(model=LeNet(), train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
+            evaluate_log(model, d_train, test_data, train_data_reduced, elements_removed=elements_removed,
                      prefix="After removing elements")
 
         for e, lr, b, l in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, ul_lambdas):
