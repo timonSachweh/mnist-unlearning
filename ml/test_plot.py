@@ -74,13 +74,13 @@ def plot_lambda_scan(lambdas, run_accuracies, plot_path="./images/lambda_results
     #plt.plot(lambdas, median_accuracies, marker="o")
     plt.boxplot(run_accuracies, positions=lambdas, widths=0.02)
     plt.xlabel("Lambda")
-    plt.ylabel("Median Test Accuracy")
-    plt.title("Effect of λ on Unlearning Performance (Median of 5 runs)")
+    plt.ylabel("Boxplot Test Accuracy")
+    plt.title(f"Effect of λ on Unlearning Performance (Boxplot of {len(run_accuracies[0])} runs)")
     plt.grid(True)
     plt.savefig(plot_path, dpi=200)
     plt.close()
 
-    print(f"\n✅ Median-Plot gespeichert unter: {plot_path}")
+    print(f"\n✅ Plot gespeichert unter: {plot_path}")
 
 
 def evaluate_accuracy(model, data_loader):
