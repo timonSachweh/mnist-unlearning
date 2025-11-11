@@ -3,6 +3,7 @@ import itertools
 from typing import Iterable, Iterator, Union, Tuple, Dict
 
 from ml import evaluate_log, LeNet, get_dataloaders, run_training, unlearn
+from ml.test_plot import test_unlearning_over_lambdas
 
 
 def main():
@@ -20,6 +21,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--remove-label", type=int, default=1, help="Label to remove for second run")
     parser.add_argument("--elements", type=int, default=20, help="Number of elements to remove from training set")
+    parser.add_argument("--plot", action="store_true", help="If set, test and save lambda-scan plot")
     args = parser.parse_args()
 
     ul_epochs = [int(i) for i in args.unlearn_epochs.split(',')]
@@ -36,16 +38,37 @@ def main():
                  removed_test_data=d_cr_r_test, prefix="Initial training")
 
     if args.class_removed:
-        model = run_training(model=LeNet(), train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
-        evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
-                     removed_test_data=d_cr_r_test, prefix="Retraining removing class")
+        # model = run_training(model=LeNet(), train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
+        # evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
+        #             removed_test_data=d_cr_r_test, prefix="Retraining removing class")
 
-        for e, lr, b, l in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, ul_lambdas):
-            model = unlearn(model_init, d_cr_train, d_cr_r_train, unlearn_epochs=e,
-                            learning_rate=lr, batch_size=b, lambda_var=l)
-            evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test,
-                         removed_train_data=d_cr_r_train, removed_test_data=d_cr_r_test,
-                         prefix=f"Unlearning removing class (epochs={e}, lr={lr}, batch_size={b}, lambda={l})")
+        # ----------------------------------------------------------
+        # Optional: LAMBDA-SCAN ausführen und Plot speichern
+        # ----------------------------------------------------------
+        if args.plot and len(ul_lambdas) > 1:
+            print("\n=== Running lambda-scan test ===")
+            for e, lr, b, _ in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, [0.01]):
+                lambdas, accuracies = test_unlearning_over_lambdas(
+                    model=model_init,
+                    keep_loader=d_cr_train,
+                    unlearn_loader=d_cr_r_train,
+                    test_loader=d_test,
+                    lambda_steps=ul_lambdas,
+                    batch_size=b,
+                    unlearn_epochs=e,
+                    learning_rate=lr,
+                    runs_per_lambda=3
+                )
+            print("Lambda scan completed.")
+        else:
+            print("Skipping lambda-scan test (either --plot not set or only one lambda provided).")
+            # Danach alle weiteren Kombinationen wie gehabt ausführen
+            for e, lr, b, l in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, ul_lambdas):
+                model = unlearn(model_init, d_cr_train, d_cr_r_train, unlearn_epochs=e,
+                                learning_rate=lr, batch_size=b, lambda_var=l)
+                evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test,
+                             removed_train_data=d_cr_r_train, removed_test_data=d_cr_r_test,
+                             prefix=f"Unlearning removing class (epochs={e}, lr={lr}, batch_size={b}, lambda={l})")
 
     if args.elements_removed:
         train_data_reduced, test_data, elements_removed, _ = get_dataloaders(batch_size=args.batch_size,
