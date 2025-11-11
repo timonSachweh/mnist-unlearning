@@ -1,6 +1,6 @@
 import copy
 
-from torch.autograd import Variable
+from torch.nn import MSELoss
 from torch.nn.utils import vector_to_parameters
 
 from .train import run_training
@@ -18,6 +18,7 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
             unlearn_epochs: int = 3, loss=nn.CrossEntropyLoss(), lambda_var: float = 0.1, learning_rate: float = 0.001):
     # compute gradients on unlearn_loader and adjust model weights accordingly
     removal_x, removal_y = _get_unlearn_data(unlearn_loader)
+    l2loss_norm = MSELoss(reduction="sum")
     model.to(device)
 
     grads = _calculate_gradients(model, removal_x, removal_y, loss)
@@ -52,7 +53,7 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
             pred_unlearn = model_working_copy(unlearn_x)
             pred_learn = model_working_copy(keep_x)
 
-            norm_loss = (masked_params - saliency_map * theta_g_weights).norm(p=2).pow(2)
+            norm_loss = l2loss_norm(masked_params, saliency_map * theta_g_weights)
             l = loss(pred_unlearn, unlearn_y_fake) + loss(pred_learn, keep_y) + lambda_var * norm_loss
             l.backward()
 
