@@ -16,7 +16,7 @@ def retrain(model, train_loader, test_loader, num_epochs):
 
 # paper uses NLLoss
 def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, batch_size: int = 64,
-            unlearn_epochs: int = 3, loss=nn.CrossEntropyLoss(), lambda_var: float = 0.1, learning_rate: float = 0.001):
+            unlearn_epochs: int = 3, loss=nn.NLLLoss(), lambda_var: float = 0.1, learning_rate: float = 0.001):
     # compute gradients on unlearn_loader and adjust model weights accordingly
     removal_x, removal_y = _get_unlearn_data(unlearn_loader)
     l2loss_norm = MSELoss(reduction="sum")
@@ -53,6 +53,10 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
             model_working_copy.zero_grad()
             pred_unlearn = model_working_copy(unlearn_x)
             pred_learn = model_working_copy(keep_x)
+
+            if isinstance(loss, nn.NLLLoss):
+                pred_unlearn = torch.log_softmax(pred_unlearn, dim=1)
+                pred_learn = torch.log_softmax(pred_learn, dim=1)
 
             norm_loss = l2loss_norm(masked_params, saliency_map * theta_g_weights)
             l = loss(pred_unlearn, unlearn_y_fake) + loss(pred_learn, keep_y) + lambda_var * norm_loss
