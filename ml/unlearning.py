@@ -14,6 +14,7 @@ def retrain(model, train_loader, test_loader, num_epochs):
     run_training(model, train_loader, test_loader, epochs=num_epochs)
 
 
+# paper uses NLLoss
 def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, batch_size: int = 64,
             unlearn_epochs: int = 3, loss=nn.CrossEntropyLoss(), lambda_var: float = 0.1, learning_rate: float = 0.001):
     # compute gradients on unlearn_loader and adjust model weights accordingly
@@ -59,6 +60,7 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
 
             gradient = torch.cat(
                 [p.grad.detach().view(-1) for p in model_working_copy.parameters() if p.grad is not None])
+            gradient = saliency_map * gradient
             theta_weights = theta_weights - gradient * learning_rate
 
     theta_weights = saliency_map * theta_weights + (1 - saliency_map) * theta_g_weights
