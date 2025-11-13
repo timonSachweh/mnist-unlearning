@@ -1,4 +1,5 @@
 import argparse
+import copy
 import itertools
 from typing import Iterable, Iterator, Union, Tuple, Dict
 
@@ -71,7 +72,8 @@ def main():
             print("Skipping lambda-scan test (either --plot not set or only one lambda provided).")
             # Danach alle weiteren Kombinationen wie gehabt ausführen
             for e, lr, b, l in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, ul_lambdas):
-                model = unlearn(model_init, d_cr_train, d_cr_r_train, unlearn_epochs=e,
+                model_copy = copy.deepcopy(model_init)
+                model = unlearn(model_copy, d_cr_train, d_cr_r_train, unlearn_epochs=e,
                                 learning_rate=lr, batch_size=b, lambda_var=l)
                 evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test,
                              removed_train_data=d_cr_r_train, removed_test_data=d_cr_r_test,
