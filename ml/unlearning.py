@@ -3,6 +3,7 @@ import copy
 from torch.nn import MSELoss
 from torch.nn.utils import vector_to_parameters
 
+from .masked_forward import forward_with_masked_params_lenet
 from .train import run_training
 import torch
 import torch.nn as nn
@@ -35,9 +36,14 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
 
     model_working_copy = copy.deepcopy(model)
     model_working_copy.to(device)
+    theta_weights = torch.nn.Parameter(theta_weights.clone().detach().to(device))
+    param_shapes = [p.shape for p in model_working_copy.parameters()]
+    param_sizes = [p.numel() for p in model_working_copy.parameters()]
+
     for epoch in range(unlearn_epochs):
-        if (epoch + 1) % 10 == 0:
-            print(f"Unlearning epoch {epoch + 1}/{unlearn_epochs}")
+        #if (epoch + 1) % 10 == 0:
+        #    print(f"Unlearning epoch {epoch + 1}/{unlearn_epochs}")
+        print(f"Unlearning epoch {epoch + 1}/{unlearn_epochs}")
         for i in range(int(max(len(keep_data_loader), len(unlearn_loader)) / batch_size)):
             keep_x, keep_y, unlearn_x, unlearn_y = _sample_batch_from_dataset(keep_data_loader, unlearn_loader,
                                                                               batch_size)
@@ -47,25 +53,32 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
             unlearn_x = unlearn_x.to(device)
             unlearn_y_fake = unlearn_y_fake.to(device)
 
-            masked_params = saliency_map * theta_weights
+            masked_params_flat = saliency_map * theta_weights
+            split_tensors = torch.split(masked_params_flat, param_sizes)
+            masked_params = [t.reshape(s) for t, s in zip(split_tensors, param_shapes)]
 
-            vector_to_parameters(masked_params.detach().clone(), model_working_copy.parameters())
-            model_working_copy.zero_grad()
-            pred_unlearn = model_working_copy(unlearn_x)
-            pred_learn = model_working_copy(keep_x)
+            # changed forward pass to use masked params
+            pred_unlearn = forward_with_masked_params_lenet(unlearn_x, masked_params)
+            pred_learn = forward_with_masked_params_lenet(keep_x, masked_params)
+
+            # transform masked_params to a single tensor for norm calculation
+            masked_params_tensor = torch.cat([p.view(-1) for p in masked_params])
+            theta_g_tensor = (saliency_map * theta_g_weights).view(-1)
 
             if isinstance(loss, nn.NLLLoss):
                 pred_unlearn = torch.log_softmax(pred_unlearn, dim=1)
                 pred_learn = torch.log_softmax(pred_learn, dim=1)
 
-            norm_loss = l2loss_norm(masked_params, saliency_map * theta_g_weights)
+            norm_loss = l2loss_norm(masked_params_tensor, saliency_map * theta_g_tensor)
             l = loss(pred_unlearn, unlearn_y_fake) + loss(pred_learn, keep_y) + lambda_var * norm_loss
             l.backward()
 
-            gradient = torch.cat(
-                [p.grad.detach().view(-1) for p in model_working_copy.parameters() if p.grad is not None])
-            gradient = saliency_map * gradient
-            theta_weights = theta_weights - gradient * learning_rate
+            with torch.no_grad():
+                if theta_weights.grad is not None:
+                    theta_weights -= learning_rate * theta_weights.grad
+                    theta_weights.grad.zero_()
+                else:
+                    print("No gradients for theta_weights")
 
     theta_weights = saliency_map * theta_weights + (1 - saliency_map) * theta_g_weights
     vector_to_parameters(theta_weights.detach().clone(), model.parameters())

@@ -65,7 +65,7 @@ def main():
                     batch_size=b,
                     unlearn_epochs=e,
                     learning_rate=lr,
-                    runs_per_lambda=10
+                    runs_per_lambda=20
                 )
             print("Lambda scan completed.")
         else:
