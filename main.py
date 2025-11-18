@@ -1,6 +1,7 @@
 import argparse
 import copy
 import itertools
+import os
 from typing import Iterable, Iterator, Union, Tuple, Dict
 
 import torch
@@ -42,21 +43,31 @@ def main():
     d_train, d_test, _, _ = get_dataloaders(batch_size=args.batch_size, remove_label=None, cifar=args.cifar)
     d_cr_train, d_cr_test, d_cr_r_train, d_cr_r_test = get_dataloaders(batch_size=args.batch_size,
                                                                        remove_label=args.remove_label, cifar=args.cifar)
-
     if args.cifar:
-        model_arch = LeNetCifar()
+        model_init = LeNetCifar()
+        if os.path.exists(f"./models/lenet_cifar_{args.epochs}.pt"):
+            model_init.load_state_dict(torch.load(f"./models/lenet_cifar_{args.epochs}.pt"))
+        else:
+            model_arch = LeNetCifar()
+            model_init = run_training(model_arch, train_data=d_train, test_data=d_test, epochs=args.epochs)
+            torch.save(model_init.state_dict(), f"./models/lenet_cifar_{args.epochs}.pt")
     else:
-        model_arch = LeNet()
+        model_init = LeNet()
+        if os.path.exists(f"./models/lenet_mnist_{args.epochs}.pt"):
+            model_init.load_state_dict(torch.load(f"./models/lenet_mnist_{args.epochs}.pt"))
+        else:
+            model_arch = LeNet()
+            model_init = run_training(model_arch, train_data=d_train, test_data=d_test, epochs=args.epochs)
+            torch.save(model_init.state_dict(), f"./models/lenet_mnist_{args.epochs}.pt")
 
-    model_init = run_training(model_arch, train_data=d_train, test_data=d_test, epochs=args.epochs)
     evaluate_log(model_init, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
                  removed_test_data=d_cr_r_test, prefix="Initial training")
 
     if args.class_removed:
         if args.retrain:
-            model = run_training(model_arch, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
+            model = run_training(model_init, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
             evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
-                     removed_test_data=d_cr_r_test, prefix="Retraining removing class")
+                         removed_test_data=d_cr_r_test, prefix="Retraining removing class")
 
         # ----------------------------------------------------------
         # Optional: LAMBDA-SCAN ausführen und Plot speichern
@@ -64,7 +75,7 @@ def main():
         if args.plot and len(ul_lambdas) > 1:
             print("\n=== Running lambda-scan test ===")
             for e, lr, b, _ in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, [0.01]):
-                lambdas, accuracies = test_unlearning_over_lambdas(
+                _, _ = test_unlearning_over_lambdas(
                     model=model_init,
                     keep_loader=d_cr_train,
                     unlearn_loader=d_cr_r_train,
@@ -73,7 +84,7 @@ def main():
                     batch_size=b,
                     unlearn_epochs=e,
                     learning_rate=lr,
-                    runs_per_lambda=20
+                    runs_per_lambda=10
                 )
             print("Lambda scan completed.")
         else:
@@ -89,18 +100,20 @@ def main():
 
     if args.elements_removed:
         train_data_reduced, test_data, elements_removed, _ = get_dataloaders(batch_size=args.batch_size,
-                                                                             remove_elements=args.elements, cifar=args.cifar)
+                                                                             remove_elements=args.elements,
+                                                                             cifar=args.cifar)
         if args.retrain:
-            model = run_training(model_arch, train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
+            model = run_training(model_init, train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
             evaluate_log(model, d_train, test_data, train_data_reduced, elements_removed=elements_removed,
-                     prefix="After removing elements")
+                         prefix="After removing elements")
 
         for e, lr, b, l in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, ul_lambdas):
             model = unlearn(model_init, train_data_reduced, elements_removed, unlearn_epochs=e,
                             learning_rate=lr, batch_size=b, lambda_var=l)
             evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test,
                          removed_train_data=d_cr_r_train, removed_test_data=d_cr_r_test,
-                         prefix=f"Unlearning removing {args.elements} elements (epochs={e}, lr={lr}, batch_size={b}, lambda={l})")
+                         prefix=f"Unlearning removing {args.elements} elements (epochs={e}, lr={lr}, batch_size={b}, "
+                                f"lambda={l})")
 
 
 def unlearn_combinations(

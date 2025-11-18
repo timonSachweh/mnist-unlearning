@@ -6,6 +6,7 @@ from utils import device
 
 
 def evaluate(model, loader, criterion):
+    model.to(device)
     model.eval()
     total_loss = 0.0
     correct = 0
