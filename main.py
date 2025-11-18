@@ -6,6 +6,7 @@ from typing import Iterable, Iterator, Union, Tuple, Dict
 import torch
 
 from ml import evaluate_log, LeNet, get_dataloaders, run_training, unlearn
+from ml.model_cifar import LeNetCifar
 from ml.test_plot import test_unlearning_over_lambdas
 
 
@@ -17,7 +18,7 @@ def main():
                         help="If set, run the full-dataset training/evaluation section")
     parser.add_argument("--elements-removed", action="store_true",
                         help="If set, run the full-dataset training/evaluation section")
-    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument('--unlearn-epochs', help='delimited list of unlearn-epochs', type=str, default='6')
     parser.add_argument('--unlearn-learning-rates', help='delimited list of unlearn-learning-rates', type=str,
                         default='0.01')
@@ -27,6 +28,8 @@ def main():
     parser.add_argument("--remove-label", type=int, default=1, help="Label to remove for second run")
     parser.add_argument("--elements", type=int, default=20, help="Number of elements to remove from training set")
     parser.add_argument("--plot", action="store_true", help="If set, test and save lambda-scan plot")
+    parser.add_argument("--cifar", action="store_true", help="If set, use CIFAR-10 dataset instead of MNIST")
+
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -36,17 +39,22 @@ def main():
     ul_batch_sizes = [int(i) for i in args.unlearn_batch_sizes.split(',')]
     ul_lambdas = [float(i) for i in args.unlearn_lambdas.split(',')]
 
-    d_train, d_test, _, _ = get_dataloaders(batch_size=args.batch_size, remove_label=None)
+    d_train, d_test, _, _ = get_dataloaders(batch_size=args.batch_size, remove_label=None, cifar=args.cifar)
     d_cr_train, d_cr_test, d_cr_r_train, d_cr_r_test = get_dataloaders(batch_size=args.batch_size,
-                                                                       remove_label=args.remove_label)
+                                                                       remove_label=args.remove_label, cifar=args.cifar)
 
-    model_init = run_training(model=LeNet(), train_data=d_train, test_data=d_test, epochs=args.epochs)
+    if args.cifar:
+        model_arch = LeNetCifar()
+    else:
+        model_arch = LeNet()
+
+    model_init = run_training(model_arch, train_data=d_train, test_data=d_test, epochs=args.epochs)
     evaluate_log(model_init, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
                  removed_test_data=d_cr_r_test, prefix="Initial training")
 
     if args.class_removed:
         if args.retrain:
-            model = run_training(model=LeNet(), train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
+            model = run_training(model_arch, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
             evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
                      removed_test_data=d_cr_r_test, prefix="Retraining removing class")
 
@@ -81,9 +89,9 @@ def main():
 
     if args.elements_removed:
         train_data_reduced, test_data, elements_removed, _ = get_dataloaders(batch_size=args.batch_size,
-                                                                             remove_elements=args.elements)
+                                                                             remove_elements=args.elements, cifar=args.cifar)
         if args.retrain:
-            model = run_training(model=LeNet(), train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
+            model = run_training(model_arch, train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
             evaluate_log(model, d_train, test_data, train_data_reduced, elements_removed=elements_removed,
                      prefix="After removing elements")
 

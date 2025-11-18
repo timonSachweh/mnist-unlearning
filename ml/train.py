@@ -6,14 +6,23 @@ from ml.evaluate import evaluate
 from utils import device
 
 
-def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remove_elements: int | None = None):
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,)),
-    ])
+def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remove_elements: int | None = None, cifar: bool = False):
+    if cifar:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
 
-    train_set = datasets.MNIST(root="./data", train=True, download=True, transform=transform)
-    test_set = datasets.MNIST(root="./data", train=False, download=True, transform=transform)
+        train_set = datasets.CIFAR10(root="./data", train=True, download=True, transform=transform)
+        test_set = datasets.CIFAR10(root="./data", train=False, download=True, transform=transform)
+    else:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,)),
+        ])
+
+        train_set = datasets.MNIST(root="./data", train=True, download=True, transform=transform)
+        test_set = datasets.MNIST(root="./data", train=False, download=True, transform=transform)
 
     if remove_elements is not None:
         # Randomly remove a certain number of elements from the training set
