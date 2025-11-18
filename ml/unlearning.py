@@ -3,7 +3,7 @@ import copy
 from torch.nn import MSELoss
 from torch.nn.utils import vector_to_parameters
 
-from .masked_forward import forward_with_masked_params_lenet
+from .masked_forward import fast_functional_forward
 from .train import run_training
 import torch
 import torch.nn as nn
@@ -58,8 +58,8 @@ def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, bat
             masked_params = [t.reshape(s) for t, s in zip(split_tensors, param_shapes)]
 
             # changed forward pass to use masked params
-            pred_unlearn = forward_with_masked_params_lenet(unlearn_x, masked_params)
-            pred_learn = forward_with_masked_params_lenet(keep_x, masked_params)
+            pred_unlearn = fast_functional_forward(model, unlearn_x, masked_params)
+            pred_learn = fast_functional_forward(model, keep_x, masked_params)
 
             # transform masked_params to a single tensor for norm calculation
             masked_params_tensor = torch.cat([p.view(-1) for p in masked_params])
