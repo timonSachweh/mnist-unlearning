@@ -2,6 +2,8 @@ import copy
 
 import torch
 import torch.nn as nn
+
+from ml.train import compute_distance
 from utils import device
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,7 +20,9 @@ def test_unlearning_over_lambdas(
         loss=nn.CrossEntropyLoss(),
         learning_rate=0.001,
         lambda_steps=None,  # falls explizit gesetzt
-        runs_per_lambda=3  # <--- Anzahl an Wiederholungen pro Lambda
+        runs_per_lambda=3,  # <--- Anzahl an Wiederholungen pro Lambda
+        distance=False,
+        retrained_model=None,
 ):
     """
     Testet verschiedene Werte von λ.
@@ -57,6 +61,11 @@ def test_unlearning_over_lambdas(
                 learning_rate=learning_rate,
             )
 
+            if retrained_model is not None and distance:
+                dist = compute_distance(retrained_model, model, test_loader)
+                plot_distance(dist, lam)
+                print(f"Distance between retrained and unlearned model: {dist}")
+
             acc = evaluate_accuracy(model_copy, test_loader)
             print(acc)
             per_run_accuracies.append(acc)
@@ -80,6 +89,20 @@ def plot_lambda_scan(lambdas, run_accuracies, plot_path="./images/lambda_results
     plt.close()
 
     print(f"\n✅ Plot gespeichert unter: {plot_path}")
+
+
+def plot_distance(distances, l):
+    plt.figure(figsize=(8, 4))
+    #plt.plot(distances, marker='o')  # Linienplot mit Punkten
+    plt.scatter(range(len(distances)), distances)
+
+    plt.xlabel("Classification class")
+    plt.ylabel("JS-Distance")
+    plt.title("JS-Distance between unlearned and retrained model")
+    plt.grid(True, alpha=0.3)
+    plt.ylim(0, 0.2)
+    plt.savefig(f"./images/js_distance_lambda_{l:.3f}.png", dpi=200)
+    plt.close()
 
 
 def evaluate_accuracy(model, data_loader):

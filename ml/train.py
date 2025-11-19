@@ -1,12 +1,15 @@
 import numpy as np
+import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from ml.evaluate import evaluate
 from utils import device
+from scipy.spatial import distance
 
 
-def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remove_elements: int | None = None, cifar: bool = False):
+def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remove_elements: int | None = None,
+                    cifar: bool = False):
     if cifar:
         transform = transforms.Compose([
             transforms.ToTensor(),
@@ -44,7 +47,7 @@ def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remo
         test_idx = [i for i, t in enumerate(test_set.targets) if int(t) != int(remove_label)]
         new_train_set = Subset(train_set, train_idx)
         new_test_set = Subset(test_set, test_idx)
-        removed_train_set = Subset(train_set, removed_train_data) 
+        removed_train_set = Subset(train_set, removed_train_data)
         removed_test_set = Subset(test_set, removed_test_data)
         return DataLoader(new_train_set, batch_size=batch_size, shuffle=True), DataLoader(new_test_set, batch_size=batch_size, shuffle=False), DataLoader(removed_train_set, batch_size=batch_size, shuffle=False), DataLoader(removed_test_set, batch_size=batch_size, shuffle=False)
 
@@ -81,6 +84,29 @@ def run_training(model, train_data, test_data, epochs: int = 3):
     for epoch in range(1, epochs + 1):
         train_loss, train_acc = train_one_epoch(model, train_data, optimizer, criterion)
         val_loss, val_acc = evaluate(model, test_data, criterion)
-        print(f"Epoch {epoch}/{epochs} | train loss {train_loss:.4f} acc {train_acc:.4f} | val loss {val_loss:.4f} acc {val_acc:.4f}")
+        print(
+            f"Epoch {epoch}/{epochs} | train loss {train_loss:.4f} acc {train_acc:.4f} | val loss {val_loss:.4f} acc {val_acc:.4f}")
 
     return model
+
+
+def compute_softmax_output(model, loader):
+    model.to(device)
+    model.eval()
+    softmax = []
+    with torch.no_grad():
+        for x, y in loader:
+            x, y = x.to(device), y.to(device)
+            out = model(x)
+            probs = torch.log_softmax(out, dim=1)
+            softmax.append(probs.cpu())
+    return torch.cat(softmax)
+
+
+def compute_distance(retrained_model, unlearned_model, loader):
+    retrained_model.to(device)
+    unlearned_model.to(device)
+    softmax_retrained = compute_softmax_output(retrained_model, loader)
+    softmax_unlearned = compute_softmax_output(unlearned_model, loader)
+    distance_r_u = distance.jensenshannon(softmax_retrained, softmax_unlearned)
+    return distance_r_u

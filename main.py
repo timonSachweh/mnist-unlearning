@@ -8,7 +8,8 @@ import torch
 
 from ml import evaluate_log, LeNet, get_dataloaders, run_training, unlearn
 from ml.model_cifar import LeNetCifar
-from ml.test_plot import test_unlearning_over_lambdas
+from ml.test_plot import test_unlearning_over_lambdas, plot_distance
+from ml.train import compute_distance
 
 
 def main():
@@ -30,6 +31,7 @@ def main():
     parser.add_argument("--elements", type=int, default=20, help="Number of elements to remove from training set")
     parser.add_argument("--plot", action="store_true", help="If set, test and save lambda-scan plot")
     parser.add_argument("--cifar", action="store_true", help="If set, use CIFAR-10 dataset instead of MNIST")
+    parser.add_argument("--distance", action="store_true", help="If set, compute distance between models after unlearning")
 
     args = parser.parse_args()
 
@@ -45,6 +47,8 @@ def main():
                                                                        remove_label=args.remove_label, cifar=args.cifar)
     if args.cifar:
         model_init = LeNetCifar()
+        if args.retrain:
+            model_retrain = LeNetCifar()
         if os.path.exists(f"./models/lenet_cifar_{args.epochs}.pt"):
             model_init.load_state_dict(torch.load(f"./models/lenet_cifar_{args.epochs}.pt"))
         else:
@@ -53,6 +57,8 @@ def main():
             torch.save(model_init.state_dict(), f"./models/lenet_cifar_{args.epochs}.pt")
     else:
         model_init = LeNet()
+        if args.retrain:
+            model_retrain = LeNet()
         if os.path.exists(f"./models/lenet_mnist_{args.epochs}.pt"):
             model_init.load_state_dict(torch.load(f"./models/lenet_mnist_{args.epochs}.pt"))
         else:
@@ -65,8 +71,8 @@ def main():
 
     if args.class_removed:
         if args.retrain:
-            model = run_training(model_init, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
-            evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
+            model_retrain = run_training(model_init, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
+            evaluate_log(model_retrain, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
                          removed_test_data=d_cr_r_test, prefix="Retraining removing class")
 
         # ----------------------------------------------------------
@@ -84,7 +90,9 @@ def main():
                     batch_size=b,
                     unlearn_epochs=e,
                     learning_rate=lr,
-                    runs_per_lambda=10
+                    runs_per_lambda=10,
+                    distance=args.distance,
+                    retrained_model=model_retrain if args.retrain else None
                 )
             print("Lambda scan completed.")
         else:
@@ -94,6 +102,10 @@ def main():
                 model_copy = copy.deepcopy(model_init)
                 model = unlearn(model_copy, d_cr_train, d_cr_r_train, unlearn_epochs=e,
                                 learning_rate=lr, batch_size=b, lambda_var=l)
+                if args.retrain and args.distance:
+                    dist = compute_distance(model_retrain, model, d_test)
+                    plot_distance(dist, l)
+                    print(f"Distance between retrained and unlearned model: {dist}")
                 evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test,
                              removed_train_data=d_cr_r_train, removed_test_data=d_cr_r_test,
                              prefix=f"Unlearning removing class (epochs={e}, lr={lr}, batch_size={b}, lambda={l})")
