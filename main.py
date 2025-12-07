@@ -2,6 +2,7 @@ import argparse
 import copy
 import itertools
 import os
+from copy import deepcopy
 from typing import Iterable, Iterator, Union, Tuple, Dict
 
 import torch
@@ -71,7 +72,8 @@ def main():
 
     if args.class_removed:
         if args.retrain:
-            model_retrain = run_training(model_init, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
+            model_copy = copy.deepcopy(model_init)
+            model_retrain = run_training(model_copy, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
             evaluate_log(model_retrain, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
                          removed_test_data=d_cr_r_test, prefix="Retraining removing class")
 

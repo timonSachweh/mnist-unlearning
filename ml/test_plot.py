@@ -1,5 +1,7 @@
 import copy
+from itertools import cycle
 
+import pandas as pd
 import torch
 import torch.nn as nn
 
@@ -37,6 +39,7 @@ def test_unlearning_over_lambdas(
         raise ValueError("lambda_steps muss eine Liste der Lambdas sein.")
 
     run_accuracies = []
+    distance_results = {}
 
     for i, lam in enumerate(lambdas):
         print(f"\n=== Testing lambda = {lam:.3f} with {runs_per_lambda} runs ===")
@@ -62,13 +65,20 @@ def test_unlearning_over_lambdas(
             )
 
             if retrained_model is not None and distance:
-                dist = compute_distance(retrained_model, model, test_loader)
-                plot_distance(dist, lam)
+                dist = compute_distance(retrained_model, model_copy, test_loader)
+                # plot_distance(dist, lam)
                 print(f"Distance between retrained and unlearned model: {dist}")
+                if lam not in distance_results:
+                    distance_results[lam] = []
+                distance_results[lam].append(dist)
 
             acc = evaluate_accuracy(model_copy, test_loader)
             print(acc)
             per_run_accuracies.append(acc)
+            if distance:
+                plot_distance_runs(distance_results,
+                                   save_path=f"./images/distances_lambda_{lam:.3f}.png",
+                                   title="Jensen-Shannon Distance over λ")
 
         run_accuracies.append(per_run_accuracies)
 
@@ -98,7 +108,7 @@ def plot_distance(distances, l):
 
     plt.xlabel("Classification class")
     plt.ylabel("JS-Distance")
-    plt.title("JS-Distance between unlearned and retrained model")
+    plt.title(f"JS-Distance between unlearned and retrained model with lambda = {l:.3f}")
     plt.grid(True, alpha=0.3)
     plt.ylim(0, 0.2)
     plt.savefig(f"./images/js_distance_lambda_{l:.3f}.png", dpi=200)
@@ -118,3 +128,60 @@ def evaluate_accuracy(model, data_loader):
             correct += (preds == y).sum().item()
             total += y.size(0)
     return correct / total
+
+
+def plot_distance_runs(distances_dict, save_path=None, title="Distances per λ"):
+    """
+    distances_dict erwartet:
+         {lambda: [d1, d2, ...]}
+    Diese Version ist fehlertolerant und wandelt Singles in Listen um.
+    """
+
+    # Farben definieren
+    colors = cycle(plt.cm.tab10.colors)
+
+    plt.figure(figsize=(10, 6))
+
+    table_rows = []
+    table_index = []
+
+    for lam, vals in distances_dict.items():
+
+        # --- WICHTIG: Sicherstellen, dass es eine Liste ist ---
+        if np.isscalar(vals):
+            vals = [vals]
+        elif not isinstance(vals, (list, tuple, np.ndarray)):
+            raise ValueError(f"Ungültiger Eintrag für λ={lam}: {vals}")
+
+        dist_list = list(vals)
+
+        # x-Werte müssen gleiche Länge haben wie dist_list
+        x = np.full(len(dist_list), lam)
+
+        plt.scatter(x, dist_list, s=60, color=next(colors), label=f"λ={lam}")
+
+        table_rows.append(dist_list)
+        table_index.append(f"λ={lam}")
+
+    # Achsen & Titel
+    plt.xlabel("λ")
+    plt.ylabel("Distance")
+    plt.title(title)
+    plt.grid(True)
+    plt.legend()
+
+    # Tabelle unter dem Plot
+    df = pd.DataFrame(table_rows, index=table_index)
+    plt.table(
+        cellText=df.values,
+        rowLabels=df.index,
+        colLabels=[f"Run {i+1}" for i in range(df.shape[1])],
+        loc="bottom",
+        cellLoc="center"
+    )
+
+    plt.subplots_adjust(bottom=0.3)
+
+    if save_path:
+        plt.savefig(save_path, dpi=200)
+    plt.show()
