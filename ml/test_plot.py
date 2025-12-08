@@ -62,7 +62,7 @@ def test_unlearning_over_lambdas(
             )
 
             if retrained_model is not None and distance:
-                dist = compute_distance(retrained_model, model, test_loader)
+                dist = compute_distance(retrained_model, model_copy, test_loader)
                 plot_distance(dist, lam)
                 print(f"Distance between retrained and unlearned model: {dist}")
 
