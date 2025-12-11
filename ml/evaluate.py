@@ -2,7 +2,7 @@
 
 import torch
 import torch.nn as nn
-from utils import device
+from utils_file import device
 
 
 def evaluate(model, loader, criterion):
