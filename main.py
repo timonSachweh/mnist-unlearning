@@ -11,8 +11,12 @@ from ml import evaluate_log, LeNet, get_dataloaders, run_training, unlearn
 from ml.model_cifar import LeNetCifar
 from ml.test_plot import test_unlearning_over_lambdas, plot_distance
 from ml.train import compute_distance
+from utils.Logger import setup_logging, logger
+from utils.profiling import timing_decorator
+from ml.unlearning import retrain
 
 
+@timing_decorator("Total execution time")
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--retrain', help='if the retraining step should be executed', action='store_true')
@@ -28,11 +32,12 @@ def main():
     parser.add_argument('--unlearn-batch-sizes', help='delimited list of unlearn-batch-sizes', type=str, default='64')
     parser.add_argument('--unlearn-lambdas', help='delimited list of unlearn-lambdas', type=str, default='0.01')
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--remove-label", type=int, default=1, help="Label to remove for second run")
+    parser.add_argument("--remove-label", type=int, default=2, help="Label to remove for second run")
     parser.add_argument("--elements", type=int, default=20, help="Number of elements to remove from training set")
     parser.add_argument("--plot", action="store_true", help="If set, test and save lambda-scan plot")
     parser.add_argument("--cifar", action="store_true", help="If set, use CIFAR-10 dataset instead of MNIST")
-    parser.add_argument("--distance", action="store_true", help="If set, compute distance between models after unlearning")
+    parser.add_argument("--distance", action="store_true",
+                        help="If set, compute distance between models after unlearning")
 
     args = parser.parse_args()
 
@@ -73,7 +78,7 @@ def main():
     if args.class_removed:
         if args.retrain:
             model_copy = copy.deepcopy(model_init)
-            model_retrain = run_training(model_copy, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
+            model_retrain = retrain(model_copy, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
             evaluate_log(model_retrain, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
                          removed_test_data=d_cr_r_test, prefix="Retraining removing class")
 
@@ -117,7 +122,8 @@ def main():
                                                                              remove_elements=args.elements,
                                                                              cifar=args.cifar)
         if args.retrain:
-            model = run_training(model_init, train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
+            model_copy = copy.deepcopy(model_init)
+            model = retrain(model_copy, train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
             evaluate_log(model, d_train, test_data, train_data_reduced, elements_removed=elements_removed,
                          prefix="After removing elements")
 
@@ -149,5 +155,12 @@ def unlearn_combinations(
     return prod_iter
 
 
-if __name__ == "__main__":
+def start():
+    setup_logging()
+    logger.info("Starting the unlearning main script.")
     main()
+    logger.info("Finished the unlearning main script.")
+
+
+if __name__ == "__main__":
+    start()

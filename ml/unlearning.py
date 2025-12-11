@@ -3,19 +3,22 @@ import copy
 from torch.nn import MSELoss
 from torch.nn.utils import vector_to_parameters
 
+from utils.profiling import timing_decorator
 from .masked_forward import fast_functional_forward
 from .train import run_training
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils import device
+from utils_file import device
 
 
+@timing_decorator("Model retraining time")
 def retrain(model, train_loader, test_loader, num_epochs):
     run_training(model, train_loader, test_loader, epochs=num_epochs)
 
 
 # paper uses NLLoss
+@timing_decorator("Model unlearning time")
 def unlearn(model, keep_data_loader: DataLoader, unlearn_loader: DataLoader, batch_size: int = 64,
             unlearn_epochs: int = 3, loss=nn.NLLLoss(), lambda_var: float = 0.1, learning_rate: float = 0.001):
     # compute gradients on unlearn_loader and adjust model weights accordingly

@@ -6,12 +6,14 @@ import torch
 import torch.nn as nn
 
 from ml.train import compute_distance
-from utils import device
+from utils.profiling import timing_decorator
+from utils_file import device
 import matplotlib.pyplot as plt
 import numpy as np
 from ml.unlearning import unlearn
 
 
+@timing_decorator("Testing unlearning over lambdas")
 def test_unlearning_over_lambdas(
         model,
         keep_loader,
@@ -75,14 +77,18 @@ def test_unlearning_over_lambdas(
             acc = evaluate_accuracy(model_copy, test_loader)
             print(acc)
             per_run_accuracies.append(acc)
-            if distance:
-                plot_distance_runs(distance_results,
-                                   save_path=f"./images/distances_lambda_{lam:.3f}.png",
-                                   title="Jensen-Shannon Distance over λ")
+        # if distance:
+        #     plot_distance_runs(distance_results,
+        #                        save_path=f"./images/distances_lambda_{lam:.3f}.png",
+        #                        title="Jensen-Shannon Distance over λ")
 
         run_accuracies.append(per_run_accuracies)
 
         plot_lambda_scan(lambdas[:i + 1], run_accuracies, f"./images/lambda_results_temp{lam: .3f}.png")
+
+    plot_lambda_development(distance_results, mode="mean", save_path=f"./images/lambda_results_all_mean{lam: .3f}.png")
+    plot_lambda_development(distance_results, mode="boxplot", save_path=f"./images/lambda_results_all_box{lam: .3f}.png")
+    plot_lambda_development(distance_results, mode="raw", save_path=f"./images/lambda_results_all_raw{lam: .3f}.png")
 
     return lambdas, run_accuracies
 
@@ -175,7 +181,7 @@ def plot_distance_runs(distances_dict, save_path=None, title="Distances per λ")
     plt.table(
         cellText=df.values,
         rowLabels=df.index,
-        colLabels=[f"Run {i+1}" for i in range(df.shape[1])],
+        colLabels=[f"Run {i + 1}" for i in range(df.shape[1])],
         loc="bottom",
         cellLoc="center"
     )
@@ -185,3 +191,83 @@ def plot_distance_runs(distances_dict, save_path=None, title="Distances per λ")
     if save_path:
         plt.savefig(save_path, dpi=200)
     plt.show()
+
+
+def plot_lambda_development(data, mode="mean", ylabel="Value", title="Jenson-Shannon Distance per Lambda", save_path=None):
+    """
+        Plottet die Entwicklung der Ergebnisse über verschiedene Lambdas hinweg.
+
+        Parameters
+        ----------
+        data : dict
+            Struktur:
+            {
+                lambda1 : [list_of_values_run1, list_of_values_run2, ...],
+                lambda2 : [...],
+                ...
+            }
+
+            Beispiel:
+            {
+                0.1: [[1,2,3], [2,3,4]],
+                0.2: [[2,2,4], [3,4,5]]
+            }
+
+        mode : str
+            "mean"       → Mittelwert + Standardabweichung
+            "boxplot"    → Boxplot je Lambda
+            "raw"        → alle Einzelkurven zeigen
+
+        ylabel : str
+            Achsenbeschriftung (y)
+
+        title : str
+            Plot-Titel
+            :param data:
+            :param mode:
+            :param ylabel:
+            :param title:
+            :param save_path:
+        """
+
+    lambdas = sorted(data.keys())
+    plt.figure(figsize=(10, 6))
+
+    if mode == "mean":
+        means = []
+        stds = []
+        for lam in lambdas:
+            values = np.array([np.mean(run) for run in data[lam]])
+            means.append(np.mean(values))
+            stds.append(np.std(values))
+
+        plt.errorbar(lambdas, means, yerr=stds, fmt='-o', capsize=5)
+        plt.ylabel(ylabel)
+        plt.xlabel("Lambda")
+        plt.title(title)
+
+    elif mode == "raw":
+        for lam in lambdas:
+            for run in data[lam]:
+                plt.plot([lam] * len(run), run, 'o', alpha=0.3)
+
+        plt.ylabel(ylabel)
+        plt.xlabel("Lambda")
+        plt.title(title)
+
+    elif mode == "boxplot":
+        all_values = [np.concatenate(data[lam]) for lam in lambdas]
+        plt.boxplot(all_values, labels=lambdas)
+        plt.ylabel(ylabel)
+        plt.xlabel("Lambda")
+        plt.title(title)
+
+    else:
+        raise ValueError("Unbekannter mode. Nutze: 'mean', 'boxplot', 'raw'.")
+
+    plt.grid(True)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=200)
+        print(f"\n✅ Plot gespeichert unter: {save_path}")
+    # plt.show()

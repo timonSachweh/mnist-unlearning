@@ -4,10 +4,12 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from ml.evaluate import evaluate
-from utils import device
+from utils_file import device
 from scipy.spatial import distance
+from utils.profiling import timing_decorator
 
 
+@timing_decorator("Dataloader loading time")
 def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remove_elements: int | None = None,
                     cifar: bool = False):
     if cifar:
@@ -37,7 +39,10 @@ def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remo
         incides_to_remove = indices[:remove_elements]
         new_train_set = Subset(train_set, indices_to_keep)
         removed_set = Subset(train_set, incides_to_remove)
-        return DataLoader(new_train_set, batch_size=batch_size, shuffle=True), DataLoader(test_set, batch_size=batch_size, shuffle=False), DataLoader(removed_set, batch_size=batch_size, shuffle=False), None
+        return DataLoader(new_train_set, batch_size=batch_size, shuffle=True), DataLoader(test_set,
+                                                                                          batch_size=batch_size,
+                                                                                          shuffle=False), DataLoader(
+            removed_set, batch_size=batch_size, shuffle=False), None
 
     if remove_label is not None:
         # Filter out all examples with the given label
@@ -49,7 +54,11 @@ def get_dataloaders(batch_size: int = 128, remove_label: int | None = None, remo
         new_test_set = Subset(test_set, test_idx)
         removed_train_set = Subset(train_set, removed_train_data)
         removed_test_set = Subset(test_set, removed_test_data)
-        return DataLoader(new_train_set, batch_size=batch_size, shuffle=True), DataLoader(new_test_set, batch_size=batch_size, shuffle=False), DataLoader(removed_train_set, batch_size=batch_size, shuffle=False), DataLoader(removed_test_set, batch_size=batch_size, shuffle=False)
+        return DataLoader(new_train_set, batch_size=batch_size, shuffle=True), DataLoader(new_test_set,
+                                                                                          batch_size=batch_size,
+                                                                                          shuffle=False), DataLoader(
+            removed_train_set, batch_size=batch_size, shuffle=False), DataLoader(removed_test_set,
+                                                                                 batch_size=batch_size, shuffle=False)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
@@ -76,6 +85,7 @@ def train_one_epoch(model, loader, optimizer, criterion):
     return total_loss / total, correct / total
 
 
+@timing_decorator("Model training time")
 def run_training(model, train_data, test_data, epochs: int = 3):
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -103,6 +113,7 @@ def compute_softmax_output(model, loader):
     return torch.cat(softmax)
 
 
+@timing_decorator("Distance computation time")
 def compute_distance(retrained_model, unlearned_model, loader):
     retrained_model.to(device)
     unlearned_model.to(device)
