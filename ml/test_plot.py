@@ -3,7 +3,8 @@ import copy
 import torch
 import torch.nn as nn
 
-from ml.train import compute_distance
+from ml.evaluate import evaluate
+from ml.train import compute_distance, compute_zrf_score, ain
 from utils import device
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,21 +16,23 @@ def test_unlearning_over_lambdas(
         keep_loader,
         unlearn_loader,
         test_loader,
+        train_loader,
         batch_size=64,
         unlearn_epochs=12,
-        loss=nn.CrossEntropyLoss(),
+        loss=nn.NLLLoss(),
         learning_rate=0.001,
         lambda_steps=None,  # falls explizit gesetzt
         runs_per_lambda=3,  # <--- Anzahl an Wiederholungen pro Lambda
         distance=False,
         retrained_model=None,
+        ain_b=False,
 ):
     """
     Testet verschiedene Werte von λ.
     Für jeden Wert werden mehrere Unlearning-Läufe ausgeführt.
     Der Median der Accuracy wird geplottet.
     """
-
+    model_init = copy.deepcopy(model)
     # Liste der Lambdas aus dem main-Parser nutzen
     if isinstance(lambda_steps, list) or isinstance(lambda_steps, np.ndarray):
         lambdas = np.array(lambda_steps)
@@ -62,9 +65,15 @@ def test_unlearning_over_lambdas(
             )
 
             if retrained_model is not None and distance:
-                dist = compute_distance(retrained_model, model, test_loader)
+                dist = compute_distance(retrained_model, model_copy, test_loader)
+                zrf = compute_zrf_score(dist)
                 plot_distance(dist, lam)
-                print(f"Distance between retrained and unlearned model: {dist}")
+                print(f"Distance between retrained and unlearned model: {dist} and zrf score: {zrf}")
+
+            if retrained_model is not None and ain_b:
+                _, full_acc_forget = evaluate(model_init, unlearn_loader, loss)
+                print("Accuracy of fully trained model on forget set is: {}".format(full_acc_forget))
+                ain(model_init, model_copy, retrained_model, train_loader, unlearn_loader, keep_loader, loss=loss)
 
             acc = evaluate_accuracy(model_copy, test_loader)
             print(acc)
