@@ -77,10 +77,6 @@ def test_unlearning_over_lambdas(
             acc = evaluate_accuracy(model_copy, test_loader)
             print(acc)
             per_run_accuracies.append(acc)
-        # if distance:
-        #     plot_distance_runs(distance_results,
-        #                        save_path=f"./images/distances_lambda_{lam:.3f}.png",
-        #                        title="Jensen-Shannon Distance over λ")
 
         run_accuracies.append(per_run_accuracies)
 
