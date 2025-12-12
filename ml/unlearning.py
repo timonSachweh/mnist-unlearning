@@ -13,8 +13,8 @@ from utils_file import device
 
 
 @timing_decorator("Model retraining time")
-def retrain(model, train_loader, test_loader, num_epochs):
-    run_training(model, train_loader, test_loader, epochs=num_epochs)
+def retrain(model, train_data, test_data, epochs):
+    run_training(model, train_data, test_data, epochs=epochs)
 
 
 # paper uses NLLoss
