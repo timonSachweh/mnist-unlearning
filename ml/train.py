@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import torch
 from torch import nn, optim
@@ -74,6 +76,8 @@ def train_one_epoch(model, loader, optimizer, criterion):
         x, y = x.to(device), y.to(device)
         optimizer.zero_grad()
         out = model(x)
+        if isinstance(criterion, nn.NLLLoss):
+            out = torch.log_softmax(out, dim=1)
         loss = criterion(out, y)
         loss.backward()
         optimizer.step()
@@ -86,9 +90,9 @@ def train_one_epoch(model, loader, optimizer, criterion):
 
 
 @timing_decorator("Model training time")
-def run_training(model, train_data, test_data, epochs: int = 3):
+def run_training(model, train_data, test_data, epochs: int = 3, loss=nn.NLLLoss()):
     model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
+    criterion = loss
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     for epoch in range(1, epochs + 1):
@@ -121,3 +125,59 @@ def compute_distance(retrained_model, unlearned_model, loader):
     softmax_unlearned = compute_softmax_output(unlearned_model, loader)
     distance_r_u = distance.jensenshannon(softmax_retrained, softmax_unlearned)
     return distance_r_u
+
+
+def compute_zrf_score(js_values):
+    avg_js = sum(js_values) / len(js_values)
+    zrf = 1 - avg_js
+    return zrf
+
+
+def relearn_time(model, train_loader, reqAcc):
+    rltime = 0
+    curr_Acc = 0
+    while curr_Acc < reqAcc:
+        rltime += 1
+        # for name, param in model.named_parameters():
+        #     print(name, param.requires_grad)
+        train_one_epoch(model, train_loader, optim.Adam(model.parameters(), lr=1e-4), nn.NLLLoss())
+        _, curr_Acc = evaluate(model, train_loader, nn.NLLLoss())
+        print("Relearn epoch: {}, Accuracy: {}".format(rltime, curr_Acc))
+        if rltime > 100:
+            print("Relearn time exceeded 100 epochs, stopping early.")
+            break
+    return rltime
+
+
+def ain(full_model, unlearned_model, retrained_model, train_loader, forget_loader, retain_loader, error_range=0.05,
+        loss=nn.NLLLoss()):
+    full_model_clone = copy.deepcopy(full_model)
+    unlearned_model_clone = copy.deepcopy(unlearned_model)
+    retrained_model_clone = copy.deepcopy(retrained_model)
+    _, full_acc_forget = evaluate(full_model_clone, forget_loader, loss)
+    print("Accuracy of fully trained model on forget set is: {}".format(full_acc_forget))
+    _, full_acc_retain = evaluate(full_model_clone, retain_loader, loss)
+    print("Accuracy of fully trained model on retain set is: {}".format(full_acc_retain))
+    _, unlearned_acc_forget = evaluate(unlearned_model_clone, forget_loader, loss)
+    print("Accuracy of forget model on forget set is: {}".format(unlearned_acc_forget))
+    _, unlearned_acc_retain = evaluate(unlearned_model_clone, retain_loader, loss)
+    print("Accuracy of forget model on retain set is: {}".format(unlearned_acc_retain))
+    _, retrained_acc_forget = evaluate(retrained_model_clone, forget_loader, loss)
+    print("Accuracy of gold model on forget set is: {}".format(retrained_acc_forget))
+    _, retrained_acc_retain = evaluate(retrained_model_clone, retain_loader, loss)
+    print("Accuracy of gold model on retain set is: {}".format(retrained_acc_retain))
+
+    reqAccF = (1 - error_range) * full_acc_forget
+
+    print("Desired Accuracy for retrain time with error range {} is {}".format(error_range, reqAccF))
+
+    rltime_gold = relearn_time(retrained_model_clone, forget_loader, reqAccF)
+
+    print("Relearning time for Gold Standard Model is {}".format(rltime_gold))
+
+    rltime_forget = relearn_time(unlearned_model_clone, forget_loader, reqAccF)
+
+    print("Relearning time for Forget Model is {}".format(rltime_forget))
+
+    rl_coeff = rltime_forget / rltime_gold
+    print("AIN = {}".format(rl_coeff))

@@ -5,7 +5,8 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-from ml.train import compute_distance
+from ml.evaluate import evaluate
+from ml.train import compute_distance, ain, compute_zrf_score
 from utils.profiling import timing_decorator
 from utils_file import device
 import matplotlib.pyplot as plt
@@ -19,6 +20,7 @@ def test_unlearning_over_lambdas(
         keep_loader,
         unlearn_loader,
         test_loader,
+        train_loader,
         batch_size=64,
         unlearn_epochs=12,
         loss=nn.CrossEntropyLoss(),
@@ -27,13 +29,15 @@ def test_unlearning_over_lambdas(
         runs_per_lambda=3,  # <--- Anzahl an Wiederholungen pro Lambda
         distance=False,
         retrained_model=None,
+        ain_b=False,
 ):
     """
     Testet verschiedene Werte von λ.
     Für jeden Wert werden mehrere Unlearning-Läufe ausgeführt.
     Der Median der Accuracy wird geplottet.
     """
-
+    model_init = copy.deepcopy(model)
+    _, full_acc_forget = evaluate(model_init, unlearn_loader, loss)
     # Liste der Lambdas aus dem main-Parser nutzen
     if isinstance(lambda_steps, list) or isinstance(lambda_steps, np.ndarray):
         lambdas = np.array(lambda_steps)
@@ -67,12 +71,20 @@ def test_unlearning_over_lambdas(
             )
 
             if retrained_model is not None and distance:
+                _, full_acc_forget = evaluate(model_init, unlearn_loader, loss)
                 dist = compute_distance(retrained_model, model_copy, test_loader)
+                zrf = compute_zrf_score(dist)
                 # plot_distance(dist, lam)
-                print(f"Distance between retrained and unlearned model: {dist}")
+                print(f"Distance between retrained and unlearned model: {dist} and zrf score: {zrf}")
                 if lam not in distance_results:
                     distance_results[lam] = []
                 distance_results[lam].append(dist)
+
+            if retrained_model is not None and ain_b:
+                model_ain = copy.deepcopy(model)
+                _, full_acc_forget = evaluate(model_ain, unlearn_loader, loss)
+                print("Accuracy of fully trained model on forget set is: {}".format(full_acc_forget))
+                ain(model_ain, model_copy, retrained_model, train_loader, unlearn_loader, keep_loader, loss=loss)
 
             acc = evaluate_accuracy(model_copy, test_loader)
             print(acc)
@@ -83,8 +95,6 @@ def test_unlearning_over_lambdas(
         plot_lambda_scan(lambdas[:i + 1], run_accuracies, f"./images/lambda_results_temp{lam: .3f}.png")
 
     plot_lambda_development(distance_results, mode="mean", save_path=f"./images/lambda_results_all_mean{lam: .3f}.png")
-    plot_lambda_development(distance_results, mode="boxplot", save_path=f"./images/lambda_results_all_box{lam: .3f}.png")
-    plot_lambda_development(distance_results, mode="raw", save_path=f"./images/lambda_results_all_raw{lam: .3f}.png")
 
     return lambdas, run_accuracies
 

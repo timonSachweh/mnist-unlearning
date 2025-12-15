@@ -13,8 +13,9 @@ from utils_file import device
 
 
 @timing_decorator("Model retraining time")
-def retrain(model, train_data, test_data, epochs):
-    run_training(model, train_data, test_data, epochs=epochs)
+def retrain(model, train_data, test_data, epochs, loss=nn.NLLLoss()):
+    model = run_training(model, train_data, test_data, epochs=epochs, loss=loss)
+    return model
 
 
 # paper uses NLLoss

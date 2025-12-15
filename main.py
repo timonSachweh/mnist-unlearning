@@ -6,11 +6,12 @@ from copy import deepcopy
 from typing import Iterable, Iterator, Union, Tuple, Dict
 
 import torch
+from torch import nn
 
 from ml import evaluate_log, LeNet, get_dataloaders, run_training, unlearn
 from ml.model_cifar import LeNetCifar
 from ml.test_plot import test_unlearning_over_lambdas, plot_distance
-from ml.train import compute_distance
+from ml.train import compute_distance, compute_zrf_score, ain
 from utils.Logger import setup_logging, logger
 from utils.profiling import timing_decorator
 from ml.unlearning import retrain
@@ -38,6 +39,8 @@ def main():
     parser.add_argument("--cifar", action="store_true", help="If set, use CIFAR-10 dataset instead of MNIST")
     parser.add_argument("--distance", action="store_true",
                         help="If set, compute distance between models after unlearning")
+    parser.add_argument("--ain", action="store_true", help="If set, compute AIN score after unlearning")
+    parser.add_argument("--loss", type=str, default="nll", help="Loss function to use: 'nll' or 'ce'")
 
     args = parser.parse_args()
 
@@ -51,6 +54,9 @@ def main():
     d_train, d_test, _, _ = get_dataloaders(batch_size=args.batch_size, remove_label=None, cifar=args.cifar)
     d_cr_train, d_cr_test, d_cr_r_train, d_cr_r_test = get_dataloaders(batch_size=args.batch_size,
                                                                        remove_label=args.remove_label, cifar=args.cifar)
+
+    loss = nn.NLLLoss() if args.loss == "nll" else nn.CrossEntropyLoss()
+
     if args.cifar:
         model_init = LeNetCifar()
         if args.retrain:
@@ -59,7 +65,7 @@ def main():
             model_init.load_state_dict(torch.load(f"./models/lenet_cifar_{args.epochs}.pt"))
         else:
             model_arch = LeNetCifar()
-            model_init = run_training(model_arch, train_data=d_train, test_data=d_test, epochs=args.epochs)
+            model_init = run_training(model_arch, train_data=d_train, test_data=d_test, epochs=args.epochs, loss=loss)
             torch.save(model_init.state_dict(), f"./models/lenet_cifar_{args.epochs}.pt")
     else:
         model_init = LeNet()
@@ -69,18 +75,18 @@ def main():
             model_init.load_state_dict(torch.load(f"./models/lenet_mnist_{args.epochs}.pt"))
         else:
             model_arch = LeNet()
-            model_init = run_training(model_arch, train_data=d_train, test_data=d_test, epochs=args.epochs)
+            model_init = run_training(model_arch, train_data=d_train, test_data=d_test, epochs=args.epochs, loss=loss)
             torch.save(model_init.state_dict(), f"./models/lenet_mnist_{args.epochs}.pt")
 
     evaluate_log(model_init, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
-                 removed_test_data=d_cr_r_test, prefix="Initial training")
+                 removed_test_data=d_cr_r_test, prefix="Initial training", loss=loss)
 
     if args.class_removed:
         if args.retrain:
             model_copy = copy.deepcopy(model_init)
-            model_retrain = retrain(model_copy, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs)
+            model_retrain = retrain(model_copy, train_data=d_cr_train, test_data=d_cr_test, epochs=args.epochs, loss=loss)
             evaluate_log(model_retrain, d_train, d_test, d_cr_train, d_cr_test, removed_train_data=d_cr_r_train,
-                         removed_test_data=d_cr_r_test, prefix="Retraining removing class")
+                         removed_test_data=d_cr_r_test, prefix="Retraining removing class", loss=loss)
 
         # ----------------------------------------------------------
         # Optional: LAMBDA-SCAN ausführen und Plot speichern
@@ -93,13 +99,16 @@ def main():
                     keep_loader=d_cr_train,
                     unlearn_loader=d_cr_r_train,
                     test_loader=d_test,
+                    train_loader=d_train,
                     lambda_steps=ul_lambdas,
                     batch_size=b,
                     unlearn_epochs=e,
                     learning_rate=lr,
                     runs_per_lambda=10,
                     distance=args.distance,
-                    retrained_model=model_retrain if args.retrain else None
+                    retrained_model=model_retrain if args.retrain else None,
+                    ain_b=args.ain,
+                    loss=loss
                 )
             print("Lambda scan completed.")
         else:
@@ -108,14 +117,19 @@ def main():
             for e, lr, b, l in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, ul_lambdas):
                 model_copy = copy.deepcopy(model_init)
                 model = unlearn(model_copy, d_cr_train, d_cr_r_train, unlearn_epochs=e,
-                                learning_rate=lr, batch_size=b, lambda_var=l)
+                                learning_rate=lr, batch_size=b, lambda_var=l, loss=loss)
                 if args.retrain and args.distance:
                     dist = compute_distance(model_retrain, model, d_test)
+                    zrf = compute_zrf_score(dist)
                     plot_distance(dist, l)
-                    print(f"Distance between retrained and unlearned model: {dist}")
+                    print(f"Distance between retrained and unlearned model: {dist} and zrf score: {zrf}")
+
+                if args.retrain and args.ain:
+                    model_ain = deepcopy(model_init)
+                    ain(model_ain, model, model_retrain, d_train, d_cr_r_train, d_cr_train, loss=loss)
                 evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test,
                              removed_train_data=d_cr_r_train, removed_test_data=d_cr_r_test,
-                             prefix=f"Unlearning removing class (epochs={e}, lr={lr}, batch_size={b}, lambda={l})")
+                             prefix=f"Unlearning removing class (epochs={e}, lr={lr}, batch_size={b}, lambda={l})", loss=loss)
 
     if args.elements_removed:
         train_data_reduced, test_data, elements_removed, _ = get_dataloaders(batch_size=args.batch_size,
@@ -123,17 +137,17 @@ def main():
                                                                              cifar=args.cifar)
         if args.retrain:
             model_copy = copy.deepcopy(model_init)
-            model = retrain(model_copy, train_data=train_data_reduced, test_data=test_data, epochs=args.epochs)
+            model = retrain(model_copy, train_data=train_data_reduced, test_data=test_data, epochs=args.epochs, loss=loss)
             evaluate_log(model, d_train, test_data, train_data_reduced, elements_removed=elements_removed,
-                         prefix="After removing elements")
+                         prefix="After removing elements", loss=loss)
 
         for e, lr, b, l in unlearn_combinations(ul_epochs, ul_learning_rates, ul_batch_sizes, ul_lambdas):
             model = unlearn(model_init, train_data_reduced, elements_removed, unlearn_epochs=e,
-                            learning_rate=lr, batch_size=b, lambda_var=l)
+                            learning_rate=lr, batch_size=b, lambda_var=l, loss=loss)
             evaluate_log(model, d_train, d_test, d_cr_train, d_cr_test,
                          removed_train_data=d_cr_r_train, removed_test_data=d_cr_r_test,
                          prefix=f"Unlearning removing {args.elements} elements (epochs={e}, lr={lr}, batch_size={b}, "
-                                f"lambda={l})")
+                                f"lambda={l})", loss=loss)
 
 
 def unlearn_combinations(
