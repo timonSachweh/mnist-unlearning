@@ -10,7 +10,7 @@ from torch import nn
 
 from ml import evaluate_log, LeNet, get_dataloaders, run_training, unlearn
 from ml.model_cifar import LeNetCifar
-from ml.test_plot import test_unlearning_over_lambdas, plot_distance
+from ml.test_plot import test_unlearning_over_lambdas, plot_distance, create_all_plots_from_csv
 from ml.train import compute_distance, compute_zrf_score, ain
 from utils.Logger import setup_logging, logger
 from utils.profiling import timing_decorator
@@ -41,6 +41,7 @@ def main():
                         help="If set, compute distance between models after unlearning")
     parser.add_argument("--ain", action="store_true", help="If set, compute AIN score after unlearning")
     parser.add_argument("--loss", type=str, default="nll", help="Loss function to use: 'nll' or 'ce'")
+    parser.add_argument("--csv_plot_path", type=str, default=None, help="Path to CSV file for plotting (if provided, skips other steps)")
 
     args = parser.parse_args()
 
@@ -56,6 +57,11 @@ def main():
                                                                        remove_label=args.remove_label, cifar=args.cifar)
 
     loss = nn.NLLLoss() if args.loss == "nll" else nn.CrossEntropyLoss()
+
+    if args.csv_plot_path:
+        print(f"Plotting from CSV file: {args.csv_plot_path}")
+        create_all_plots_from_csv(args.csv_plot_path)
+        return
 
     if args.cifar:
         model_init = LeNetCifar()

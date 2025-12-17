@@ -2,6 +2,7 @@ import copy
 
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 from torch import nn, optim
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
@@ -133,20 +134,86 @@ def compute_zrf_score(js_values):
     return zrf
 
 
-def relearn_time(model, train_loader, reqAcc):
+def plot_acc(run_accuracies_1, run_accuracies_2, req_acc,
+             plot_path="./images/epochs_acc.png"):
+    max_epochs = max(len(run_accuracies_1), len(run_accuracies_2))
+    epochs = np.arange(0, max_epochs)
+    width = 0.4
+
+    color_run1 = "tab:blue"
+    color_run2 = "tab:orange"
+
+    plt.figure(figsize=(9, 5))
+
+    label_run1_used = False
+    label_run2_used = False
+    plt.axhline(y=req_acc, color="red", linestyle="--", linewidth=2, label="Required Accuracy")
+
+    for i, epoch in enumerate(epochs):
+        has_1 = i < len(run_accuracies_1)
+        has_2 = i < len(run_accuracies_2)
+
+        if has_1 and has_2:
+            plt.bar(epoch - width / 2, run_accuracies_1[i],
+                    width=width, color=color_run1,
+                    label="Retrained model" if not label_run1_used else "", edgecolor="black",
+                    hatch="//", linewidth=2)
+            label_run1_used = True
+
+            plt.bar(epoch + width / 2, run_accuracies_2[i],
+                    width=width, color=color_run2,
+                    label="Unlearned model" if not label_run2_used else "", edgecolor="black",
+                    hatch="//", linewidth=2)
+            label_run2_used = True
+
+        elif has_1:
+            plt.bar(epoch, run_accuracies_1[i],
+                    width=width, color=color_run1,
+                    label="Retrained model" if not label_run1_used else "", edgecolor="black",
+                    hatch="//", linewidth=2)
+            label_run1_used = True
+
+        elif has_2:
+            plt.bar(epoch, run_accuracies_2[i],
+                    width=width, color=color_run2,
+                    label="Unlearned model" if not label_run2_used else "", edgecolor="black",
+                    hatch="//", linewidth=2)
+            label_run2_used = True
+
+    plt.xticks(epochs)
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Test accuracy")
+    plt.title("Test accuracy per epoch during retraining with forget dataset")
+    plt.legend()
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+    plt.savefig(plot_path, dpi=200)
+    plt.close()
+
+    print(f"\n✅ Plot gespeichert unter: {plot_path}")
+
+
+def relearn_time(model, train_loader, reqAcc, loss=nn.NLLLoss()):
     rltime = 0
     curr_Acc = 0
+    acc_history = []
+    _, curr_Acc = evaluate(model, train_loader, loss)
+
+    acc_history.append(curr_Acc)
     while curr_Acc < reqAcc:
         rltime += 1
         # for name, param in model.named_parameters():
         #     print(name, param.requires_grad)
-        train_one_epoch(model, train_loader, optim.Adam(model.parameters(), lr=1e-4), nn.NLLLoss())
-        _, curr_Acc = evaluate(model, train_loader, nn.NLLLoss())
+        train_one_epoch(model, train_loader, optim.Adam(model.parameters(), lr=5e-5), nn.NLLLoss())
+        _, curr_Acc = evaluate(model, train_loader, loss)
+
+        acc_history.append(curr_Acc)
         print("Relearn epoch: {}, Accuracy: {}".format(rltime, curr_Acc))
         if rltime > 100:
             print("Relearn time exceeded 100 epochs, stopping early.")
             break
-    return rltime
+    return rltime, acc_history
 
 
 def ain(full_model, unlearned_model, retrained_model, train_loader, forget_loader, retain_loader, error_range=0.05,
@@ -171,12 +238,12 @@ def ain(full_model, unlearned_model, retrained_model, train_loader, forget_loade
 
     print("Desired Accuracy for retrain time with error range {} is {}".format(error_range, reqAccF))
 
-    rltime_gold = relearn_time(retrained_model_clone, forget_loader, reqAccF)
+    rltime_gold, acc_gold = relearn_time(retrained_model_clone, forget_loader, reqAccF, loss)
 
     print("Relearning time for Gold Standard Model is {}".format(rltime_gold))
 
-    rltime_forget = relearn_time(unlearned_model_clone, forget_loader, reqAccF)
-
+    rltime_forget, acc_forget = relearn_time(unlearned_model_clone, forget_loader, reqAccF, loss)
+    plot_acc(acc_gold, acc_forget, reqAccF)
     print("Relearning time for Forget Model is {}".format(rltime_forget))
 
     rl_coeff = rltime_forget / rltime_gold
